@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sequencing Minigame</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background-color: #f9f9f9;
+    }
+    .board {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin: 30px 0;
+    }
+    .slot, .image-slot {
+      width: 120px;
+      height: 120px;
+      border: 2px dashed #ccc;
+      background-color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .slot img, .image-slot img {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    .selected {
+      border: 3px solid blue;
+    }
+    .active-board {
+      outline: 3px solid #4caf50;
+      outline-offset: -5px;
+    }
+    #held {
+      margin-top: 10px;
+      font-size: 18px;
+    }
+    #message {
+      margin-top: 20px;
+      font-size: 20px;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h2>Use A/D to move, W to pick up, S to place, Tab to switch rows</h2>
+
+  <div class="board" id="storyboard">
+    <!-- Storyboard (Top row) -->
+  </div>
+
+  <div class="board" id="choices">
+    <!-- Image choices (Bottom row) -->
+  </div>
+
+  <div id="held">Holding: <span id="heldItem">Nothing</span></div>
+  <div id="message"></div>
+
+  <script>
+    const images = [
+      { id: 0, src: 'https://raw.githubusercontent.com/boobalootoo/aandd/main/1.png' },
+      { id: 1, src: 'https://raw.githubusercontent.com/boobalootoo/aandd/main/2.png' },
+      { id: 2, src: 'https://raw.githubusercontent.com/boobalootoo/aandd/main/3.png' },
+      { id: 3, src: 'https://raw.githubusercontent.com/boobalootoo/aandd/main/4.png' }
+    ];
+    const correctOrder = [0, 1, 2, 3];
+
+    let storyboard = [null, null, null, null];
+    let choiceOrder = [...images].sort(() => Math.random() - 0.5);
+    let held = null;
+
+    let selectedTop = 0;
+    let selectedBottom = 0;
+    let activeBoard = 'bottom'; // 'top' or 'bottom'
+
+    const storyboardEl = document.getElementById('storyboard');
+    const choicesEl = document.getElementById('choices');
+    const heldEl = document.getElementById('heldItem');
+    const messageEl = document.getElementById('message');
+
+    function render() {
+      storyboardEl.innerHTML = '';
+      choicesEl.innerHTML = '';
+
+      // Render top storyboard row
+      storyboard.forEach((img, idx) => {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        if (activeBoard === 'top' && idx === selectedTop) slot.classList.add('selected');
+        if (img) {
+          const image = document.createElement('img');
+          image.src = img.src;
+          slot.appendChild(image);
+        }
+        storyboardEl.appendChild(slot);
+      });
+
+      // Render bottom choices row
+      choiceOrder.forEach((img, idx) => {
+        const slot = document.createElement('div');
+        slot.className = 'image-slot';
+        if (activeBoard === 'bottom' && idx === selectedBottom) slot.classList.add('selected');
+        if (img) {
+          const image = document.createElement('img');
+          image.src = img.src;
+          slot.appendChild(image);
+        }
+        choicesEl.appendChild(slot);
+      });
+
+      heldEl.textContent = held ? `Image ${held.id + 1}` : 'Nothing';
+
+      // Check for win condition
+      const current = storyboard.map(x => x ? x.id : null);
+      if (JSON.stringify(current) === JSON.stringify(correctOrder)) {
+        messageEl.textContent = "✅ Great job! You sequenced the story correctly.";
+      } else {
+        messageEl.textContent = "";
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        activeBoard = activeBoard === 'top' ? 'bottom' : 'top';
+      } else if (e.key === 'a') {
+        if (activeBoard === 'top' && selectedTop > 0) selectedTop--;
+        else if (activeBoard === 'bottom' && selectedBottom > 0) selectedBottom--;
+      } else if (e.key === 'd') {
+        if (activeBoard === 'top' && selectedTop < storyboard.length - 1) selectedTop++;
+        else if (activeBoard === 'bottom' && selectedBottom < choiceOrder.length - 1) selectedBottom++;
+      } else if (e.key === 'w') {
+        // Pick up
+        if (!held) {
+          if (activeBoard === 'bottom' && choiceOrder[selectedBottom]) {
+            held = choiceOrder[selectedBottom];
+            choiceOrder[selectedBottom] = null;
+          } else if (activeBoard === 'top' && storyboard[selectedTop]) {
+            held = storyboard[selectedTop];
+            storyboard[selectedTop] = null;
+          }
+        }
+      } else if (e.key === 's') {
+        // Drop
+        if (held) {
+          if (activeBoard === 'top' && !storyboard[selectedTop]) {
+            storyboard[selectedTop] = held;
+            held = null;
+          } else if (activeBoard === 'bottom' && !choiceOrder[selectedBottom]) {
+            choiceOrder[selectedBottom] = held;
+            held = null;
+          }
+        }
+      }
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
