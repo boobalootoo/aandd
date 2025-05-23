@@ -1,0 +1,175 @@
+<!-- D-A-V-E-D Minigames Bundle -->
+<!-- All use only W, A, S, D for controls -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>D-A-V-E-D Minigames</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #eef2f7;
+      margin: 0;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+      background: white;
+      border: 2px solid #333;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game" width="600" height="400"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const keys = {};
+document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// Game Types
+const GAME_MODES = ['visual', 'educational', 'dexterity', 'tracing'];
+let mode = 'tracing'; // Change mode here
+
+// Shared Player
+const player = { x: 50, y: 200, size: 10, color: 'blue', path: [] };
+
+// Tracing Path
+const tracingPath = [
+  { x: 100, y: 200 },
+  { x: 200, y: 100 },
+  { x: 300, y: 200 },
+  { x: 400, y: 300 },
+  { x: 500, y: 200 }
+];
+
+function movePlayer() {
+  if (keys['w']) player.y -= 2;
+  if (keys['s']) player.y += 2;
+  if (keys['a']) player.x -= 2;
+  if (keys['d']) player.x += 2;
+  if (mode === 'tracing') player.path.push({ x: player.x, y: player.y });
+}
+
+function drawPlayer() {
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x, player.y, player.size, player.size);
+}
+
+function drawTracing() {
+  // Draw intended path
+  ctx.strokeStyle = 'gray';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(tracingPath[0].x, tracingPath[0].y);
+  for (let i = 1; i < tracingPath.length; i++) {
+    ctx.lineTo(tracingPath[i].x, tracingPath[i].y);
+  }
+  ctx.stroke();
+
+  // Draw player's path
+  ctx.strokeStyle = 'blue';
+  ctx.beginPath();
+  for (let i = 0; i < player.path.length - 1; i++) {
+    ctx.moveTo(player.path[i].x, player.path[i].y);
+    ctx.lineTo(player.path[i + 1].x, player.path[i + 1].y);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = 'black';
+  ctx.fillText('Trace the path using W, A, S, D', 10, 20);
+}
+
+function drawShapes() {
+  shapes.forEach(s => {
+    ctx.beginPath();
+    ctx.fillStyle = s.type === targetShape ? 'lime' : 'gray';
+    if (s.type === 'circle') ctx.arc(s.x, s.y, 15, 0, Math.PI * 2);
+    else if (s.type === 'square') ctx.rect(s.x - 15, s.y - 15, 30, 30);
+    else if (s.type === 'triangle') {
+      ctx.moveTo(s.x, s.y - 15);
+      ctx.lineTo(s.x - 15, s.y + 15);
+      ctx.lineTo(s.x + 15, s.y + 15);
+      ctx.closePath();
+    }
+    ctx.fill();
+  });
+  ctx.fillStyle = 'black';
+  ctx.fillText(`Find: ${targetShape}`, 10, 20);
+}
+
+function drawFallingItems() {
+  if (Math.random() < 0.03) {
+    fallingItems.push({
+      x: Math.random() * 560,
+      y: 0,
+      type: Math.random() < 0.7 ? 'book' : 'toy'
+    });
+  }
+  fallingItems.forEach(item => {
+    item.y += 2;
+    ctx.fillStyle = item.type === 'book' ? 'green' : 'red';
+    ctx.fillRect(item.x, item.y, 20, 20);
+    if (
+      player.x < item.x + 20 && player.x + player.size > item.x &&
+      player.y < item.y + 20 && player.y + player.size > item.y
+    ) {
+      if (item.type === 'book') score++;
+      else score = Math.max(0, score - 1);
+      item.y = 9999;
+    }
+  });
+  ctx.fillStyle = 'black';
+  ctx.fillText(`Score: ${score}`, 10, 20);
+}
+
+function drawDexterity() {
+  pegs.forEach(p => {
+    if (!p.placed) {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, 15, 15);
+      if (!player.hasPeg &&
+        player.x < p.x + 15 && player.x + player.size > p.x &&
+        player.y < p.y + 15 && player.y + player.size > p.y
+      ) {
+        player.hasPeg = p;
+      }
+    }
+  });
+
+  holes.forEach(h => {
+    ctx.strokeStyle = h.color;
+    ctx.strokeRect(h.x, h.y, 20, 20);
+    if (player.hasPeg &&
+      player.x < h.x + 20 && player.x + player.size > h.x &&
+      player.y < h.y + 20 && player.y + player.size > h.y &&
+      player.hasPeg.color === h.color
+    ) {
+      player.hasPeg.placed = true;
+      player.hasPeg = false;
+    }
+  });
+  if (player.hasPeg) {
+    ctx.fillStyle = player.hasPeg.color;
+    ctx.fillRect(player.x + 5, player.y - 10, 10, 10);
+  }
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  movePlayer();
+  drawPlayer();
+  if (mode === 'visual') drawShapes();
+  else if (mode === 'educational') drawFallingItems();
+  else if (mode === 'dexterity') drawDexterity();
+  else if (mode === 'tracing') drawTracing();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
