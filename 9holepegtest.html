@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nine-Hole Peg Test</title>
+  <style>
+    body {
+      margin: 0;
+      background: #deb887;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+      background-color: #f5deb3;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game" width="600" height="400"></canvas>
+<audio id="peg-sound" src="https://raw.githubusercontent.com/boobalootoo/conkersminigame/main/44077_therealisa_wood%20(online-audio-converter.com).mp3"></audio>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const pegRadius = 20;
+const holeRadius = 22;
+const holeSpacing = 80;
+const offsetX = 100;
+const offsetY = 100;
+
+const holes = [];
+for (let row = 0; row < 3; row++) {
+  for (let col = 0; col < 3; col++) {
+    holes.push({ x: offsetX + col * holeSpacing, y: offsetY + row * holeSpacing, filled: false });
+  }
+}
+
+let pegsPlaced = 0;
+let holdingPeg = true;
+let pegX = 300;
+let pegY = 300;
+const pegSpeed = 5;
+
+const handImg = new Image();
+handImg.src = "https://raw.githubusercontent.com/boobalootoo/HANDS/main/hand.png";
+
+const pegSound = document.getElementById("peg-sound");
+
+function drawBoard() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw holes
+  for (let hole of holes) {
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, holeRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#8b4513";
+    ctx.fill();
+    ctx.strokeStyle = "#654321";
+    ctx.stroke();
+  }
+
+  // Draw placed pegs
+  for (let i = 0; i < pegsPlaced; i++) {
+    ctx.beginPath();
+    ctx.arc(holes[i].x, holes[i].y, pegRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#a0522d";
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Draw held peg
+  if (holdingPeg && pegsPlaced < 9) {
+    ctx.drawImage(handImg, pegX - 30, pegY - 30, 60, 60);
+    ctx.beginPath();
+    ctx.arc(pegX, pegY, pegRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#a0522d";
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+function update() {
+  if (holdingPeg) {
+    // Check if over hole
+    const target = holes[pegsPlaced];
+    const dx = pegX - target.x;
+    const dy = pegY - target.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 10) {
+      holes[pegsPlaced].filled = true;
+      pegsPlaced++;
+      holdingPeg = pegsPlaced < 9;
+      pegSound.play();
+      pegX = 300;
+      pegY = 300;
+    }
+  }
+
+  drawBoard();
+  requestAnimationFrame(update);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (!holdingPeg) return;
+
+  if (e.key === "w") pegY -= pegSpeed;
+  if (e.key === "a") pegX -= pegSpeed;
+  if (e.key === "s") pegY += pegSpeed;
+  if (e.key === "d") pegX += pegSpeed;
+});
+
+handImg.onload = () => {
+  update();
+};
+</script>
+</body>
+</html>
