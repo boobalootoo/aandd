@@ -2,20 +2,19 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Fullscreen Backwards PDF Animation</title>
+  <title>Fast Fullscreen PDF Flip (Reverse)</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      overflow: hidden;
       background: black;
+      overflow: hidden;
     }
     canvas {
       display: block;
       width: 100vw;
       height: 100vh;
-      object-fit: contain;
     }
   </style>
 </head>
@@ -29,30 +28,31 @@
 
     let pdfDoc = null;
     let currentPage = 0;
-    const delay = 2000; // Time between pages in ms
+    const interval = 500; // milliseconds between pages (adjust speed here)
 
-    // Resize canvas to match screen
-    function resizeCanvas() {
+    // Set canvas size to window size once
+    function setupCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+    setupCanvas();
+    window.addEventListener('resize', setupCanvas);
 
-    // Load PDF
     pdfjsLib.getDocument(url).promise.then(pdf => {
       pdfDoc = pdf;
-      currentPage = pdf.numPages + 1; // Start just after the last page
-      animateBackwards();
+      currentPage = pdf.numPages + 1;
+      requestAnimationFrame(showPrevPage);
     });
 
-    function animateBackwards() {
-      if (!pdfDoc || currentPage <= 1) return;
+    function showPrevPage() {
       currentPage--;
+      if (currentPage < 1) return; // Stop at first page
+
       pdfDoc.getPage(currentPage).then(page => {
+        const unscaled = page.getViewport({ scale: 1 });
         const scale = Math.min(
-          canvas.width / page.getViewport({ scale: 1 }).width,
-          canvas.height / page.getViewport({ scale: 1 }).height
+          canvas.width / unscaled.width,
+          canvas.height / unscaled.height
         );
         const viewport = page.getViewport({ scale });
 
@@ -61,11 +61,20 @@
           viewport: viewport
         };
 
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        // Smooth page rendering without flash
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = viewport.width;
+        offscreenCanvas.height = viewport.height;
+        const offCtx = offscreenCanvas.getContext('2d');
 
-        page.render(renderContext).promise.then(() => {
-          setTimeout(animateBackwards, delay);
+        page.render({ canvasContext: offCtx, viewport }).promise.then(() => {
+          // Clear and draw from offscreen to avoid flicker
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(offscreenCanvas, 
+            (canvas.width - viewport.width) / 2,
+            (canvas.height - viewport.height) / 2
+          );
+          setTimeout(() => requestAnimationFrame(showPrevPage), interval);
         });
       });
     }
