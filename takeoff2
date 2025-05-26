@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plane Takeoff Simulator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            font-family: 'Inter', sans-serif;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            color: white;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: calc(100vh - 100px); /* Adjust height for UI */
+            background-color: #87CEEB; /* Sky blue */
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        .ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+        }
+        .ui-container div {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .control-instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 1em;
+            line-height: 1.5;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+        }
+        .reset-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 25px;
+            background-color: #4CAF50; /* Green */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .reset-button:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+        }
+        .reset-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="takeoffCanvas"></canvas>
+    </div>
+
+    <div class="ui-container">
+        <div>Speed: <span id="speedDisplay">0</span> km/h</div>
+        <div>Altitude: <span id="altitudeDisplay">0</span> m</div>
+        <div>Pitch: <span id="pitchDisplay">0</span>°</div>
+        <div>Yaw: <span id="yawDisplay">0</span>°</div>
+    </div>
+
+    <div class="control-instructions">
+        <strong>Controls:</strong><br>
+        &#8593; (Up Arrow): Pitch Up<br>
+        &#8595; (Down Arrow): Pitch Down<br>
+        &#8592; (Left Arrow): Yaw Left<br>
+        &#8594; (Right Arrow): Yaw Right
+    </div>
+
+    <button class="reset-button" id="resetButton">Reset Simulation</button>
+
+    <script>
+        // Global variables for Three.js scene elements
+        let scene, camera, renderer;
+        let plane; // Plane still exists for calculations, but will be invisible
+        let runway;
+        let pilotView; // Object3D to control camera movement and plane's position/rotation
+
+        let speed = 0; // km/h
+        let altitude = 0; // meters
+        let pitchAngle = 0; // degrees
+        let yawAngle = 0; // degrees
+        let hasTakenOff = false;
+
+        // Constants for simulation
+        const BASE_FORWARD_SPEED = 150; // km/h - Constant forward speed
+        const PITCH_INCREMENT = 0.5; // degrees per key press
+        const MAX_PITCH_ANGLE = 15; // degrees
+        const MIN_PITCH_ANGLE = -5; // degrees (for landing/descent)
+        const YAW_INCREMENT = 0.5; // degrees per key press
+        const SCENE_GROUND_LENGTH = 20000; // meters - overall ground length
+        const SCENE_GROUND_WIDTH = 20000; // meters - overall ground width
+        const RUNWAY_LENGTH = 10000; // meters - significantly longer for "infinite" feel
+        const RUNWAY_WIDTH = 50; // meters
+        const PLANE_START_Z = -RUNWAY_LENGTH / 2 + 50; // Start plane near one end of runway
+        const GRAVITY = 0.05; // Downward force
+        const CLIMB_RATE = 0.2; // meters per frame for max pitch - Increased for easier takeoff
+        const TAKEOFF_PITCH_THRESHOLD = 2; // Minimum pitch to initiate takeoff
+        const LANDING_ALTITUDE_THRESHOLD = 100; // meters - altitude at which camera starts looking at runway
+
+        // UI elements
+        const speedDisplay = document.getElementById('speedDisplay');
+        const altitudeDisplay = document.getElementById('altitudeDisplay');
+        const pitchDisplay = document.getElementById('pitchDisplay');
+        const yawDisplay = document.getElementById('yawDisplay');
+        const resetButton = document.getElementById('resetButton');
+        const canvas = document.getElementById('takeoffCanvas');
+
+        // Function to initialize the Three.js scene
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+
+            // Camera (Perspective Camera for pilot's POV)
+            // FOV, Aspect Ratio, Near Clipping Plane, Far Clipping Plane
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / (window.innerHeight - 100), 0.1, 2000);
+
+            // Create pilotView object and add camera to it
+            pilotView = new THREE.Object3D();
+            pilotView.position.set(0, 5, PLANE_START_Z); // Initial position for the pilot's view
+            pilotView.rotation.set(0, 0, 0); // Ensure starting facing down the runway (along positive Z)
+            scene.add(pilotView);
+            pilotView.add(camera);
+            camera.position.set(0, 1, -8); // Camera position relative to pilotView (slightly above and behind)
+            camera.rotation.x = 0.1; // Initial slight downward tilt relative to pilotView
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight - 100); // Set renderer size to canvas size
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            // Plane Model (simple box for now) - now invisible
+            // This object is used for internal calculations but not rendered
+            const planeBodyGeometry = new THREE.BoxGeometry(5, 2, 15);
+            const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, metalness: 0.8, roughness: 0.4 });
+            plane = new THREE.Mesh(planeBodyGeometry, planeMaterial);
+            plane.visible = false;
+            scene.add(plane);
+
+            // Wings (invisible as children of the plane)
+            const wingGeometry = new THREE.BoxGeometry(20, 0.5, 5);
+            const leftWing = new THREE.Mesh(wingGeometry, planeMaterial);
+            leftWing.position.set(0, 2.5, 0);
+            plane.add(leftWing);
+
+            // Tail Fin (invisible)
+            const tailFinGeometry = new THREE.BoxGeometry(0.5, 4, 3);
+            const tailFin = new THREE.Mesh(tailFinGeometry, planeMaterial);
+            tailFin.position.set(0, 4, -6);
+            plane.add(tailFin);
+
+            // Green Ground
+            const groundGeometry = new THREE.PlaneGeometry(SCENE_GROUND_WIDTH, SCENE_GROUND_LENGTH);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x32CD32, side: THREE.DoubleSide }); // Lime Green
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2; // Rotate to be flat on the ground
+            ground.position.y = -0.1; // Slightly below the runway
+            scene.add(ground);
+
+            // Runway
+            const runwayGeometry = new THREE.PlaneGeometry(RUNWAY_WIDTH, RUNWAY_LENGTH);
+            const runwayMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, side: THREE.DoubleSide });
+            runway = new THREE.Mesh(runwayGeometry, runwayMaterial);
+            runway.rotation.x = -Math.PI / 2; // Rotate to be flat on the ground
+            runway.position.y = 0; // Ground level, on top of the green ground
+            scene.add(runway);
+
+            // Add runway markings (simple white lines)
+            const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+            const lineSpacing = 50; // meters between lines
+            for (let i = 0; i < RUNWAY_LENGTH / lineSpacing; i++) {
+                const lineGeometry = new THREE.PlaneGeometry(1, 20);
+                const line = new THREE.Mesh(lineGeometry, lineMaterial);
+                line.rotation.x = -Math.PI / 2;
+                line.position.set(0, 0.1, runway.position.z + (i * lineSpacing) - (RUNWAY_LENGTH / 2) + (lineSpacing / 2));
+                runway.add(line);
+            }
+
+            // Trees along the runway (on the green ground)
+            const treeTrunkGeometry = new THREE.BoxGeometry(1, 10, 1);
+            const treeTrunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Brown
+            const treeFoliageGeometry = new THREE.ConeGeometry(5, 10, 8);
+            const treeFoliageMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 }); // Forest Green
+
+            const treeSpacing = 50; // meters between trees
+            const numTrees = Math.floor(RUNWAY_LENGTH / treeSpacing);
+            const offsetFromRunway = RUNWAY_WIDTH / 2 + 10; // Distance from runway edge
+
+            for (let i = 0; i < numTrees; i++) {
+                const treeZ = (i * treeSpacing) - (RUNWAY_LENGTH / 2) + (treeSpacing / 2);
+
+                // Left side trees
+                const treeGroupLeft = new THREE.Group();
+                const trunkLeft = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
+                const foliageLeft = new THREE.Mesh(treeFoliageGeometry, treeFoliageMaterial);
+                trunkLeft.position.y = 5; // Half of trunk height
+                foliageLeft.position.y = 10 + 5; // Trunk height + half of foliage height
+                treeGroupLeft.add(trunkLeft);
+                treeGroupLeft.add(foliageLeft);
+                treeGroupLeft.position.set(-offsetFromRunway, 0, treeZ);
+                scene.add(treeGroupLeft);
+
+                // Right side trees
+                const treeGroupRight = new THREE.Group();
+                const trunkRight = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
+                const foliageRight = new THREE.Mesh(treeFoliageGeometry, treeFoliageMaterial);
+                trunkRight.position.y = 5;
+                foliageRight.position.y = 10 + 5;
+                treeGroupRight.add(trunkRight);
+                treeGroupRight.add(foliageRight);
+                treeGroupRight.position.set(offsetFromRunway, 0, treeZ);
+                scene.add(treeGroupRight);
+            }
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1);
+            directionalLight.position.set(50, 100, 50);
+            scene.add(directionalLight);
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            resetButton.addEventListener('click', resetSimulation);
+
+            // Initial UI update
+            updateUI();
+        }
+
+        // Handle window resizing
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / (window.innerHeight - 100);
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight - 100);
+        }
+
+        // Handle keyboard input
+        let keys = {};
+        function onKeyDown(event) {
+            keys[event.key] = true;
+        }
+
+        function onKeyUp(event) {
+            keys[event.key] = false;
+        }
+
+        // Update simulation state based on input
+        function updateSimulation() {
+            // Speed is now constant
+            speed = BASE_FORWARD_SPEED;
+
+            // Pitch control - Always update pitchAngle based on input
+            if (keys['ArrowUp']) {
+                pitchAngle = Math.min(MAX_PITCH_ANGLE, pitchAngle + PITCH_INCREMENT);
+            } else if (keys['ArrowDown']) {
+                pitchAngle = Math.max(MIN_PITCH_ANGLE, pitchAngle - PITCH_INCREMENT);
+            }
+
+            // Yaw control (no clamping for 360-degree rotation)
+            if (keys['ArrowLeft']) {
+                yawAngle -= YAW_INCREMENT;
+            } else if (keys['ArrowRight']) {
+                yawAngle += YAW_INCREMENT;
+            }
+
+            // Update pilotView position based on speed
+            const actualSpeed = speed * 0.01; // Scale speed for scene units
+            pilotView.translateZ(-actualSpeed); // Move along the negative local Z axis (forward)
+
+            // Apply yaw to pilotView
+            pilotView.rotation.y = yawAngle * Math.PI / 180;
+
+            // Apply pitch to camera (relative to pilotView)
+            let cameraPitchRotation = 0.1 - (pitchAngle * Math.PI / 180);
+
+            // Adjust camera pitch for landing view
+            if (altitude < LANDING_ALTITUDE_THRESHOLD) { // Always consider landing view if below threshold
+                const normalizedAltitude = Math.min(1, altitude / LANDING_ALTITUDE_THRESHOLD); // 0 at ground, 1 at threshold
+                const landingLookDownAngle = THREE.MathUtils.lerp(0.5, 0, normalizedAltitude);
+                cameraPitchRotation += landingLookDownAngle;
+            }
+            camera.rotation.x = cameraPitchRotation;
+
+            // --- Altitude and Takeoff/Landing Logic ---
+            let verticalVelocity = 0;
+
+            // Calculate base vertical velocity based on pitch
+            verticalVelocity = (pitchAngle / MAX_PITCH_ANGLE) * CLIMB_RATE;
+            verticalVelocity -= GRAVITY; // Apply gravity
+
+            altitude += verticalVelocity; // Apply vertical velocity
+
+            // Handle ground collision and takeoff/landing state
+            if (altitude <= 0) {
+                altitude = 0; // Snap to ground
+
+                // If on ground and pitching up beyond threshold, initiate takeoff
+                if (pitchAngle > TAKEOFF_PITCH_THRESHOLD) {
+                    hasTakenOff = true; // Plane is now taking off
+                }
+                // If we were airborne and now hit the ground with low pitch, it's a landing
+                else if (hasTakenOff && pitchAngle <= TAKEOFF_PITCH_THRESHOLD) {
+                    hasTakenOff = false; // Mark as landed
+                    pitchAngle = 0; // Reset pitch to flat on landing
+                    camera.rotation.x = 0.1; // Reset camera pitch
+                }
+                // If on ground and not taking off or landing, ensure no vertical movement
+                // (altitude is already snapped to 0)
+            } else {
+                // If altitude is above ground, we are airborne
+                hasTakenOff = true;
+            }
+
+            // Ensure altitude never goes negative
+            altitude = Math.max(0, altitude);
+            pilotView.position.y = altitude + 2; // Keep pilotView at correct altitude relative to ground
+
+            // The invisible plane object should follow the pilotView for consistency in calculations
+            plane.position.copy(pilotView.position);
+            plane.rotation.copy(pilotView.rotation);
+        }
+
+        // Update UI elements
+        function updateUI() {
+            speedDisplay.textContent = speed.toFixed(0);
+            altitudeDisplay.textContent = altitude.toFixed(0);
+            pitchDisplay.textContent = pitchAngle.toFixed(1);
+            // Normalize yaw angle for display only, to keep it within a readable range
+            let displayYaw = yawAngle % 360;
+            if (displayYaw > 180) displayYaw -= 360;
+            if (displayYaw < -180) displayYaw += 360;
+            yawDisplay.textContent = displayYaw.toFixed(1);
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updateSimulation();
+            updateUI();
+
+            renderer.render(scene, camera);
+        }
+
+        // Reset simulation to initial state
+        function resetSimulation() {
+            speed = 0;
+            altitude = 0;
+            pitchAngle = 0;
+            yawAngle = 0; // Reset yaw angle
+            hasTakenOff = false;
+
+            // Reset pilotView position and rotation
+            pilotView.position.set(0, 5, PLANE_START_Z);
+            pilotView.rotation.set(0, 0, 0); // Ensure initial facing down runway
+
+            // Reset camera position and rotation relative to pilotView
+            camera.position.set(0, 1, -8);
+            camera.rotation.x = 0.1;
+
+            // Reset plane position and rotation (plane is invisible but its state is used)
+            plane.position.copy(pilotView.position);
+            plane.rotation.copy(pilotView.rotation);
+
+            updateUI();
+        }
+
+        // Start the simulation when the window loads
+        window.onload = function () {
+            init();
+            animate();
+        };
+    </script>
+</body>
+</html>
