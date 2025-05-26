@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Flight Map Interface</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden; /* Prevent scrolling */
+    }
+
+    #map {
+      position: absolute; /* Position map absolutely to fill the screen */
+      top: 0;
+      left: 0;
+      height: 100vh; /* Map height matches viewport height */
+      width: 100vw; /* Map width matches viewport width */
+      z-index: 0; /* Ensure map is behind the cockpit */
+    }
+
+    #cockpit {
+      position: fixed; /* Fix cockpit to cover the entire viewport */
+      top: 0;
+      left: 0;
+      width: 100vw; /* Cockpit width matches viewport width */
+      height: 100vh; /* Cockpit height matches viewport height */
+      background: url('https://raw.githubusercontent.com/boobalootoo/aandd/main/cockpit.png') no-repeat center center;
+      background-size: cover; /* Cover the entire area, potentially cropping */
+      z-index: 1000; /* Ensure cockpit is on top of the map */
+      pointer-events: none; /* Allow mouse events to pass through to the map below */
+    }
+
+    /* Minimap and compass are removed for this full-screen cockpit layout */
+    /* If you wish to re-add them, their positioning will need to be carefully considered */
+    /* to avoid conflict with the new cockpit overlay. */
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="cockpit"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Initialize the Leaflet map
+    const map = L.map('map', {
+      center: [51.505, -0.09], // Initial map center (London)
+      zoom: 15, // Initial zoom level
+      zoomControl: false, // Disable default zoom control
+      inertia: false // Disable inertia for more precise movement
+    });
+
+    // Add Esri World Imagery tile layer to the map
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri & contributors' // Attribution for the tile layer
+    }).addTo(map);
+
+    // Initialize an array to store coordinates for the flight trail
+    const trailCoords = [[51.505, -0.09]];
+    // Create a polyline to represent the trail on the map
+    const trail = L.polyline(trailCoords, { color: 'lime', weight: 3 }).addTo(map);
+
+    // Define the distance to pan the map with each arrow key press
+    const panDistance = 0.0008; // degrees
+
+    // Add a keydown event listener to handle map movement
+    document.addEventListener('keydown', (e) => {
+      const center = map.getCenter(); // Get current map center
+      let lat = center.lat; // Current latitude
+      let lng = center.lng; // Current longitude
+
+      // Adjust latitude and longitude based on arrow key pressed
+      switch (e.key) {
+        case 'ArrowUp':    lat += panDistance; break;
+        case 'ArrowDown':  lat -= panDistance; break;
+        case 'ArrowLeft':  lng -= panDistance; break;
+        case 'ArrowRight': lng += panDistance; break;
+        default: return; // If other key is pressed, do nothing
+      }
+
+      // Create a new LatLng object for the updated center
+      const newCenter = L.latLng(lat, lng);
+      // Add the new coordinates to the trail
+      trailCoords.push([lat, lng]);
+      // Update the polyline with the new trail coordinates
+      trail.setLatLngs(trailCoords);
+      // Set the map view to the new center
+      map.setView(newCenter);
+      e.preventDefault(); // Prevent default browser actions (e.g., scrolling)
+    });
+
+    // Simulated compass - optional rotation update
+    // Note: Leaflet's default map object does not have a getBearing() method for rotation.
+    // This part is a placeholder and would require a custom Leaflet plugin or
+    // more advanced logic to truly simulate compass rotation based on map movement.
+    map.on('move', () => {
+      // The compass element is not present in the HTML anymore for this layout.
+      // const compass = document.getElementById('compass');
+      // const heading = map.getBearing ? map.getBearing() : 0;
+      // compass.style.transform = `rotate(${heading}deg)`;
+    });
+  </script>
+</body>
+</html>
