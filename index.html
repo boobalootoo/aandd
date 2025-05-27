@@ -180,9 +180,22 @@
                 if (url) {
                     gameIframe.src = url; // Load the external URL into the iframe
                     gameOverlay.classList.remove('hidden'); // Show the overlay
+
+                    // Add a load listener to the iframe to focus it once content is loaded
+                    gameIframe.onload = () => {
+                        try {
+                            // Attempt to focus the iframe's content window
+                            gameIframe.contentWindow.focus();
+                            console.log(`Iframe for ${formatGameName(game)} focused.`);
+                        } catch (e) {
+                            console.warn(`Could not focus iframe for ${formatGameName(game)}. Cross-origin restrictions or browser policies might apply.`, e);
+                            // Fallback: Inform user if focus isn't possible
+                            // You might want to add a visible message to the user here
+                        }
+                    };
                 } else {
                     console.error(`URL not found for game: ${game}`);
-                    // Optionally, display an error message within the iframe or overlay
+                    // Display an error message within the iframe
                     gameIframe.srcdoc = `
                         <div style='display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; font-family: "Inter", sans-serif; color: #dc2626; background-color: #fee2e2; border-radius: 0.75rem;'>
                             <h2 style='font-size: 2rem; font-weight: bold; margin-bottom: 1rem;'>Error Loading Game</h2>
@@ -198,6 +211,7 @@
         overlayHomeButton.addEventListener('click', () => {
             gameOverlay.classList.add('hidden'); // Hide the overlay
             gameIframe.src = 'about:blank'; // Clear the iframe's src to prevent previous content from lingering
+            gameIframe.onload = null; // Remove the onload listener to prevent it from firing on about:blank
         });
 
         // Helper function to format game names for display
