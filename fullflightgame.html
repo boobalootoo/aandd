@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Flight Map Interface</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Ensure HTML and body take full height and prevent scrolling */
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif; /* Use Inter font */
+            background-color: #1a1a1a; /* Dark background */
+            color: #f0f0f0; /* Light text */
+        }
+
+        /* Map container styling */
+        #map {
+            position: absolute; /* Position map absolutely to fill the screen */
+            top: 0;
+            left: 0;
+            height: 100vh; /* Map height matches viewport height */
+            width: 100vw; /* Map width matches viewport width */
+            z-index: 0; /* Ensure map is behind the cockpit */
+            border-radius: 8px; /* Rounded corners for the map */
+        }
+
+        /* Cockpit overlay styling */
+        #cockpit {
+            position: fixed; /* Fix cockpit to cover the entire viewport */
+            top: 0;
+            left: 0;
+            width: 100vw; /* Cockpit width matches viewport width */
+            height: 100vh; /* Cockpit height matches viewport height */
+            background: url('https://raw.githubusercontent.com/boobalootoo/aandd/main/cockpit.png') no-repeat center center;
+            background-size: cover; /* Cover the entire area, potentially cropping */
+            z-index: 1000; /* Ensure cockpit is on top of the map */
+            pointer-events: none; /* Allow mouse events to pass through to the map below */
+            border-radius: 8px; /* Rounded corners for the cockpit overlay */
+        }
+
+        /* Message box for user feedback */
+        #messageBox {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 12px;
+            z-index: 1001;
+            display: none; /* Hidden by default */
+            font-size: 16px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Compass styling */
+        #compass {
+            position: fixed;
+            top: 10%; /* Adjust position to fit dashboard */
+            left: 50%;
+            transform: translateX(-50%); /* Center horizontally */
+            width: 100px; /* Slightly larger compass */
+            height: 100px;
+            background-color: rgba(255, 255, 255, 0.1); /* Slightly transparent background */
+            border: 2px solid #333;
+            border-radius: 50%;
+            z-index: 1001; /* On top of cockpit */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none; /* Allow mouse events to pass through */
+            box-shadow: 0 0 15px rgba(0,0,0,0.6); /* Add more shadow */
+            overflow: hidden; /* Hide anything outside the circle */
+            font-size: 14px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0,0,0,0.7);
+        }
+
+        .compass-direction {
+            position: absolute;
+            transform: translate(-50%, -50%); /* Center text precisely */
+        }
+
+        #compass-north { top: 10%; left: 50%; }
+        #compass-east { top: 50%; right: 5%; }
+        #compass-south { bottom: 5%; left: 50%; }
+        #compass-west { top: 50%; left: 5%; }
+
+        #compass-needle {
+            position: absolute;
+            width: 100%; /* Take full width of compass container for SVG positioning */
+            height: 100%; /* Take full height of compass container for SVG positioning */
+            transition: transform 0.1s ease-out; /* Smooth rotation */
+            display: flex; /* Use flexbox for centering SVG */
+            justify-content: center;
+            align-items: center;
+        }
+
+        #compass-arrow {
+            width: 20px; /* Size of the arrow */
+            height: 20px;
+            fill: red; /* Color of the arrow */
+            transform: translateY(-25px); /* Move arrow up to be centered on the compass */
+        }
+
+        /* Mission UI elements */
+        .ui-button {
+            position: fixed;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            z-index: 1001;
+        }
+
+        .ui-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 123, 255, 0.4);
+        }
+
+        #missionsBtn {
+            top: 20px;
+            left: 20px;
+        }
+
+        #resetMissionBtn {
+            top: 20px;
+            right: 20px;
+            background-color: #dc3545;
+            box-shadow: 0 4px 10px rgba(220, 53, 69, 0.3);
+        }
+
+        #resetMissionBtn:hover {
+            background-color: #c82333;
+            box-shadow: 0 6px 15px rgba(220, 53, 69, 0.4);
+        }
+
+        #currentObjective {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #00ff00; /* Green for objective */
+            padding: 10px 20px;
+            border-radius: 8px;
+            z-index: 1001;
+            font-size: 18px;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Mission Selection Modal */
+        #missionSelectionModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.85); /* Darker overlay */
+            z-index: 2000; /* On top of everything */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        #missionSelectionModal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background-color: #2c2c2c; /* Darker modal background */
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            text-align: center;
+            position: relative;
+            animation: fadeInScale 0.3s ease-out;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .modal-content h2 {
+            color: #f0f0f0;
+            margin-bottom: 25px;
+            font-size: 28px;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        #missionList {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Responsive grid */
+            gap: 20px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        .mission-card {
+            background-color: #3a3a3a;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .mission-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+        }
+
+        .mission-card h3 {
+            color: #00ff00; /* Green for mission titles */
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+
+        .mission-card p {
+            color: #cccccc;
+            font-size: 14px;
+            margin-bottom: 15px;
+            flex-grow: 1; /* Allows content to take available space */
+        }
+
+        .mission-card button {
+            width: 100%;
+            padding: 10px 15px;
+            background-color: #28a745; /* Green start button */
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+        }
+
+        .mission-card button:hover {
+            background-color: #218838;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(40, 167, 69, 0.4);
+        }
+
+        .close-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            color: #ccc;
+            cursor: pointer;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+
+        .close-button:hover {
+            color: #fff;
+        }
+
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 768px) {
+            .modal-content {
+                padding: 20px;
+            }
+
+            .modal-content h2 {
+                font-size: 24px;
+                margin-bottom: 20px;
+            }
+
+            #missionList {
+                grid-template-columns: 1fr; /* Single column on small screens */
+            }
+
+            .ui-button {
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+
+            #missionsBtn {
+                top: 10px;
+                left: 10px;
+            }
+
+            #resetMissionBtn {
+                top: 10px;
+                right: 10px;
+            }
+
+            #currentObjective {
+                top: 10px;
+                padding: 8px 15px;
+                font-size: 16px;
+            }
+
+            #compass {
+                width: 80px;
+                height: 80px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="cockpit"></div>
+    <div id="messageBox"></div>
+
+    <div id="compass">
+        <span id="compass-north" class="compass-direction">N</span>
+        <span id="compass-east" class="compass-direction">E</span>
+        <span id="compass-south" class="compass-direction">S</span>
+        <span id="compass-west" class="compass-direction">W</span>
+        <div id="compass-needle">
+            <svg id="compass-arrow" viewBox="0 0 100 100">
+                <polygon points="50,10 70,90 50,70 30,90" />
+            </svg>
+        </div>
+    </div>
+
+    <button id="missionsBtn" class="ui-button">Missions</button>
+
+    <button id="resetMissionBtn" class="ui-button">Reset Mission</button>
+
+    <div id="currentObjective"></div>
+
+    <div id="missionSelectionModal">
+        <div class="modal-content">
+            <button class="close-button" id="closeModalBtn">&times;</button>
+            <h2>Select a Mission</h2>
+            <div id="missionList">
+                </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Ensure all scripts and DOM are loaded before executing the main logic
+        window.onload = function() {
+            // --- DOM Element References ---
+            const messageBox = document.getElementById('messageBox');
+            const compassNeedle = document.getElementById('compass-needle');
+            const missionsBtn = document.getElementById('missionsBtn');
+            const resetMissionBtn = document.getElementById('resetMissionBtn');
+            const missionSelectionModal = document.getElementById('missionSelectionModal');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const missionListDiv = document.getElementById('missionList');
+            const currentObjectiveDisplay = document.getElementById('currentObjective');
+
+            // --- Game State Variables ---
+            let currentMission = null; // Stores the currently active mission object
+            let currentWaypointIndex = -1; // Tracks the index of the current target waypoint
+            let targetMarker = null; // Leaflet marker for the current target airport
+            const arrivalThreshold = 5000; // Distance in meters to detect arrival at a waypoint (e.g., 5km)
+            let missionStarted = false; // Boolean to track if a mission is active
+
+            // Map and Plane Variables (initial values)
+            let currentLocation = L.latLng(0, 0); // Default initial map center (equator, prime meridian)
+            let movementInterval; // Interval ID for continuous forward movement
+            let currentRotation = 0; // Visual rotation of the map content (0 = North, positive clockwise)
+
+            // --- Airport Data (Latitude, Longitude) ---
+            const airports = {
+                "GPS": { lat: -0.45389, lng: -90.26583, name: "Seymour Airport (Galapagos)" },
+                "YWG": { lat: 49.900, lng: -97.240, name: "Winnipeg James Armstrong Richardson Int'l Airport" },
+                "MAO": { lat: -3.038611, lng: -60.049444, name: "Eduardo Gomes International Airport (Manaus)" },
+                "MZT": { lat: 23.161944, lng: -106.265278, name: "General Rafael Buelna International Airport (Mazatlan)" },
+                "FLL": { lat: 26.07250, lng: -80.15278, name: "Fort Lauderdale–Hollywood International Airport" },
+                "SLZ": { lat: -2.586944, lng: -44.236111, name: "Marechal Cunha Machado International Airport (Sao Luis)" },
+                "YYT": { lat: 47.61861, lng: -52.75250, name: "St. John's International Airport" },
+                "LAD": { lat: -8.85837, lng: 13.23120, name: "Luanda Quatro de Fevereiro International Airport" },
+                "KEF": { lat: 63.985, lng: -22.605, name: "Keflavík International Airport" },
+                "BGF": { lat: 4.398475, lng: 18.518786, name: "Bangui M'Poko International Airport" },
+                "WAW": { lat: 52.16583, lng: 20.96722, name: "Warsaw Chopin Airport" },
+                "MGQ": { lat: 2.013611, lng: 45.304722, name: "Aden Adde International Airport (Mogadishu)" },
+                "KZN": { lat: 55.606, lng: 49.278, name: "Kazan International Airport" },
+                "MLE": { lat: 4.19167, lng: 73.52889, name: "Velana International Airport (Maldives)" },
+                "KJA": { lat: 56.075, lng: 92.490, name: "Krasnoyarsk International Airport" },
+                "DVO": { lat: 7.12528, lng: 125.64583, name: "Francisco Bangoy International Airport (Davao)" },
+                "KTM": { lat: 27.69722, lng: 85.35917, name: "Tribhuvan International Airport (Kathmandu)" },
+                "CSX": { lat: 28.188, lng: 113.220, name: "Changsha Huanghua International Airport" }
+            };
+
+            // --- Mission Definitions ---
+            const missions = [
+                {
+                    name: "Trans-American Journey",
+                    waypoints: ["GPS", "YWG", "MAO"],
+                    description: "Fly from the Galapagos Islands, across North America, and down to the heart of the Amazon."
+                },
+                {
+                    name: "Coastal Connect",
+                    waypoints: ["MZT", "FLL"],
+                    description: "A short hop from Mexico's Pacific coast to Florida's Atlantic shores."
+                },
+                {
+                    name: "Atlantic Crossing",
+                    waypoints: ["SLZ", "YYT", "LAD", "KEF"],
+                    description: "An epic journey across the Atlantic, starting in Brazil, visiting Canada, Angola, and ending in Iceland."
+                },
+                {
+                    name: "African & European Link",
+                    waypoints: ["BGF", "WAW", "MGQ", "KZN"],
+                    description: "Connect the heart of Africa to Europe and then to the vastness of Russia, with a stop in Somalia."
+                },
+                {
+                    name: "Asian Traverse",
+                    waypoints: ["MLE", "KJA", "DVO"],
+                    description: "Journey from the tropical Maldives, through the Siberian expanse, to the Philippines."
+                },
+                {
+                    name: "Himalayan to Hunan",
+                    waypoints: ["KTM", "CSX"],
+                    description: "From the majestic Himalayas of Nepal to the bustling city of Changsha, China."
+                }
+            ];
+
+            // --- Leaflet Map Initialization ---
+            const map = L.map('map', {
+                center: currentLocation, // Set initial center
+                zoom: 2, // Initial zoom level (global view)
+                zoomControl: false, // Disable default zoom control
+                inertia: false, // Disable inertia for more precise movement
+                attributionControl: false // Disable default Leaflet attribution
+            });
+
+            // Add Esri World Imagery tile layer to the map
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '&copy; Esri & contributors', // Attribution for the tile layer
+                maxZoom: 19 // Set a maximum zoom level for the tile layer
+            }).addTo(map);
+
+            // Initialize an array to store coordinates for the flight trail
+            const trailCoords = [[currentLocation.lat, currentLocation.lng]]; // Start trail at initial location
+            // Create a polyline to represent the trail on the map
+            const trail = L.polyline(trailCoords, { color: 'lime', weight: 3 }).addTo(map);
+
+            // Add a marker for the current location (the "plane")
+            const planeMarker = L.circleMarker(currentLocation, {
+                radius: 8,
+                fillColor: '#ff0000', // Red color
+                color: '#000',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+
+            // Define the rotation amount in degrees for each left/right arrow key press
+            const rotationAmount = 10; // degrees (Increased for more noticeable turns)
+
+            // Base movement speed factor (in degrees per interval)
+            const baseMovementSpeedFactor = 0.00004; // Reduced for slower movement
+
+            // --- Helper Functions ---
+
+            /**
+             * Displays a message in a temporary message box.
+             * @param {string} message - The message to display.
+             * @param {number} duration - The duration in milliseconds to display the message.
+             */
+            function showMessage(message, duration = 2000) {
+                messageBox.textContent = message;
+                messageBox.style.display = 'block';
+                clearTimeout(messageBox.hideTimeout); // Clear any existing timeout
+                messageBox.hideTimeout = setTimeout(() => {
+                    messageBox.style.display = 'none';
+                }, duration);
+            }
+
+            /**
+             * Applies the current rotation to the Leaflet map's internal panes.
+             * This makes the map content rotate while the container stays fixed.
+             */
+            function applyMapRotation() {
+                // Target the main map pane which contains all layers (tiles, markers, polylines)
+                const mapPane = map.getPane('mapPane'); // 'mapPane' is the default name for the main pane
+                if (mapPane) {
+                    mapPane.style.transform = `rotate(${-currentRotation}deg)`; /* Apply negative rotation to map content */
+                    mapPane.style.transformOrigin = `center center`;
+                }
+            }
+
+            /**
+             * Updates the compass needle's rotation based on the current map rotation.
+             */
+            function updateCompass() {
+                // The compass needle should rotate by currentRotation to point in the direction of travel.
+                // 0 degrees is North, positive is clockwise.
+                compassNeedle.style.transform = `rotate(${currentRotation}deg)`;
+            }
+
+            /**
+             * Calculates the movement speed based on the current zoom level.
+             * Higher zoom (closer to ground) means slower real-world movement.
+             * Lower zoom (higher altitude) means faster real-world movement.
+             * @returns {number} The calculated speed in degrees per interval.
+             */
+            function getAdjustedMovementSpeed() {
+                const currentZoom = map.getZoom();
+                // The formula Math.pow(2, (maxZoom - currentZoom)) scales the speed exponentially.
+                // We use 19 as an approximate max zoom for this tile layer.
+                return baseMovementSpeedFactor * Math.pow(2, (19 - currentZoom));
+            }
+
+            /**
+             * Moves the map forward based on the current map's visual rotation and speed.
+             */
+            function moveForward() {
+                const speed = getAdjustedMovementSpeed();
+                // Use currentRotation (visual rotation of the map content) for movement calculation.
+                // Convert currentRotation (0=North, 90=East, etc.) to radians for trigonometric functions.
+                // Standard math angles: 0 is East, 90 is North.
+                // So, (90 - currentRotation) aligns screen North (0 degrees) with math 90 deg for correct sin/cos.
+                const headingRadians = (90 - currentRotation) * (Math.PI / 180);
+
+                // Calculate changes in latitude and longitude
+                const deltaLat = speed * Math.sin(headingRadians);
+                const deltaLng = speed * Math.cos(headingRadians);
+
+                // Update the current location
+                currentLocation.lat += deltaLat;
+                currentLocation.lng += deltaLng;
+
+                // Add the new coordinates to the trail
+                trailCoords.push([currentLocation.lat, currentLocation.lng]);
+                // Update the polyline with the new trail coordinates
+                trail.setLatLngs(trailCoords);
+                // Set the map view to the new center
+                map.setView(currentLocation);
+                // Update the plane marker's position
+                planeMarker.setLatLng(currentLocation);
+
+                // If a mission is active, check for waypoint arrival
+                if (missionStarted && currentMission && currentWaypointIndex < currentMission.waypoints.length) {
+                    checkWaypointArrival();
+                }
+            }
+
+            /**
+             * Opens the mission selection modal.
+             */
+            function openMissionSelection() {
+                missionSelectionModal.classList.add('active');
+            }
+
+            /**
+             * Closes the mission selection modal.
+             */
+            function closeMissionSelection() {
+                missionSelectionModal.classList.remove('active');
+            }
+
+            /**
+             * Starts a selected mission.
+             * @param {number} missionIndex - The index of the mission to start.
+             */
+            function startMission(missionIndex) {
+                currentMission = missions[missionIndex];
+                currentWaypointIndex = 0;
+                missionStarted = true;
+
+                // Clear existing trail and markers
+                trailCoords.length = 0; // Clear the array
+                trail.setLatLngs(trailCoords); // Update the polyline
+                if (targetMarker) {
+                    map.removeLayer(targetMarker);
+                    targetMarker = null;
+                }
+
+                // Set plane's starting location to the first waypoint of the mission
+                const startAirportCode = currentMission.waypoints[0];
+                const startAirport = airports[startAirportCode];
+                if (startAirport) {
+                    currentLocation = L.latLng(startAirport.lat, startAirport.lng);
+                    planeMarker.setLatLng(currentLocation);
+                    map.setView(currentLocation, 8); // Zoom in on the starting airport
+                    trailCoords.push([currentLocation.lat, currentLocation.lng]); // Add starting point to trail
+                    trail.setLatLngs(trailCoords);
+                } else {
+                    showMessage("Error: Starting airport not found for this mission.", 3000);
+                    resetMission(); // Reset if starting airport is invalid
+                    return;
+                }
+
+                loadWaypoint(); // Load the first waypoint
+                closeMissionSelection();
+                showMessage(`Mission "${currentMission.name}" started!`);
+                currentObjectiveDisplay.style.display = 'block';
+            }
+
+            /**
+             * Loads the current target waypoint for the mission.
+             */
+            function loadWaypoint() {
+                if (currentWaypointIndex >= currentMission.waypoints.length) {
+                    // Mission complete scenario, handled by checkWaypointArrival
+                    return;
+                }
+
+                if (targetMarker) {
+                    map.removeLayer(targetMarker); // Remove previous target marker
+                }
+
+                const targetAirportCode = currentMission.waypoints[currentWaypointIndex];
+                const targetAirport = airports[targetAirportCode];
+
+                if (targetAirport) {
+                    // Update current objective display
+                    currentObjectiveDisplay.textContent = `Objective: Fly to ${targetAirport.name}`;
+
+                    // Add a marker for the target airport
+                    targetMarker = L.marker([targetAirport.lat, targetAirport.lng], {
+                        icon: L.divIcon({
+                            className: 'target-icon',
+                            html: `<div style="background-color: #ffc107; color: black; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 12px; white-space: nowrap; border: 1px solid #c9a700;">${targetAirport.name}</div>`,
+                            iconSize: [100, 30], // Adjust size as needed
+                            iconAnchor: [50, 15] // Center the icon
+                        })
+                    }).addTo(map);
+
+                    // Optionally, adjust map view to show both plane and target
+                    const bounds = L.latLngBounds(currentLocation, L.latLng(targetAirport.lat, targetAirport.lng));
+                    map.flyToBounds(bounds.pad(0.2), { duration: 2 }); // Pad to give some margin, smooth transition
+                    showMessage(`Next objective: ${targetAirport.name}`);
+                } else {
+                    showMessage("Error: Target airport not found. Resetting mission.", 3000);
+                    resetMission();
+                }
+            }
+
+            /**
+             * Checks if the plane has arrived at the current target waypoint.
+             */
+            function checkWaypointArrival() {
+                if (!targetMarker) return; // No target set
+
+                const targetLatLng = targetMarker.getLatLng();
+                const distance = currentLocation.distanceTo(targetLatLng); // Distance in meters
+
+                if (distance < arrivalThreshold) {
+                    showMessage(`Arrived at ${airports[currentMission.waypoints[currentWaypointIndex]].name}!`, 3000);
+                    map.removeLayer(targetMarker); // Remove the arrived target marker
+                    targetMarker = null; // Clear reference
+
+                    currentWaypointIndex++; // Move to the next waypoint
+
+                    if (currentWaypointIndex < currentMission.waypoints.length) {
+                        loadWaypoint(); // Load the next waypoint
+                    } else {
+                        // Mission complete!
+                        showMessage(`Mission "${currentMission.name}" COMPLETED! Good job, pilot!`, 5000);
+                        resetMission(); // Reset game state after mission completion
+                    }
+                }
+            }
+
+            /**
+             * Resets the current mission and allows free flight.
+             */
+            function resetMission() {
+                missionStarted = false;
+                currentMission = null;
+                currentWaypointIndex = -1;
+                if (targetMarker) {
+                    map.removeLayer(targetMarker);
+                    targetMarker = null;
+                }
+                currentObjectiveDisplay.style.display = 'none';
+                currentObjectiveDisplay.textContent = '';
+
+                // Clear the trail
+                trailCoords.length = 0;
+                // Set a default starting location for free flight, e.g., center of the map
+                currentLocation = L.latLng(0, 0);
+                planeMarker.setLatLng(currentLocation);
+                trailCoords.push([currentLocation.lat, currentLocation.lng]);
+                trail.setLatLngs(trailCoords);
+                map.setView(currentLocation, 2); // Zoom out to a global view
+
+                showMessage('Free flight mode activated. Select a new mission to begin!', 3000);
+            }
+
+
+            // --- Event Listeners ---
+
+            // Keydown event listener for map content rotation and zoom
+            document.addEventListener('keydown', (e) => {
+                // Only prevent default if it's an arrow key to allow other inputs if needed
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                }
+
+                switch (e.key) {
+                    case 'ArrowUp':
+                        map.zoomIn();
+                        showMessage('Zooming In');
+                        break;
+                    case 'ArrowDown':
+                        map.zoomOut();
+                        showMessage('Zooming Out');
+                        break;
+                    case 'ArrowLeft':
+                        currentRotation -= rotationAmount;
+                        currentRotation = (currentRotation % 360 + 360) % 360; // Normalize rotation
+                        applyMapRotation();
+                        updateCompass();
+                        showMessage(`Turning Left: ${currentRotation.toFixed(0)}°`);
+                        break;
+                    case 'ArrowRight':
+                        currentRotation += rotationAmount;
+                        currentRotation = (currentRotation % 360 + 360) % 360; // Normalize rotation
+                        applyMapRotation();
+                        updateCompass();
+                        showMessage(`Turning Right: ${currentRotation.toFixed(0)}°`);
+                        break;
+                    default:
+                        return; // If other key is pressed, do nothing
+                }
+            });
+
+            // Missions button click
+            missionsBtn.addEventListener('click', openMissionSelection);
+
+            // Close modal button click
+            closeModalBtn.addEventListener('click', closeMissionSelection);
+
+            // Reset Mission button click
+            resetMissionBtn.addEventListener('click', resetMission);
+
+            // --- Initial Setup ---
+
+            // Populate mission list in the modal
+            missions.forEach((mission, index) => {
+                const missionCard = document.createElement('div');
+                missionCard.classList.add('mission-card');
+
+                const missionTitle = document.createElement('h3');
+                missionTitle.textContent = mission.name;
+                missionCard.appendChild(missionTitle);
+
+                const missionDescription = document.createElement('p');
+                missionDescription.textContent = mission.description;
+                missionCard.appendChild(missionDescription);
+
+                const startButton = document.createElement('button');
+                startButton.textContent = 'Start Mission';
+                startButton.dataset.missionIndex = index; // Store index for later use
+                startButton.addEventListener('click', (e) => {
+                    startMission(parseInt(e.target.dataset.missionIndex));
+                });
+                missionCard.appendChild(startButton);
+
+                missionListDiv.appendChild(missionCard);
+            });
+
+            // Start continuous forward movement
+            movementInterval = setInterval(moveForward, 100); // Move every 100 milliseconds
+
+            // Initial updates for compass and message
+            applyMapRotation(); // Apply initial rotation (0deg)
+            updateCompass(); // Update compass to initial 0deg
+            showMessage('Welcome, pilot! Use Arrow Keys: Up/Down for Zoom, Left/Right for Turn. Click "Missions" to start your adventure!');
+        }; // End of window.onload
+    </script>
+</body>
+</html>
