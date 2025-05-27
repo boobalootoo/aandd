@@ -15,6 +15,7 @@
             background-color: #f0f4f8; /* Light background */
             display: flex; /* Use flexbox for split screen */
             height: 100vh; /* Full viewport height */
+            position: relative; /* Needed for fixed positioning of the new button */
         }
         /* Custom styles for the pixel-art like checkbox */
         .checkbox-square {
@@ -70,6 +71,35 @@
         #right-game-iframe {
             border-radius: 0.75rem; /* Match other rounded corners */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* Subtle shadow */
+        }
+        /* Styles for the new "Cut to the chase" button */
+        .cut-to-chase-button {
+            position: fixed;
+            bottom: 2rem; /* Distance from the bottom */
+            left: 50%; /* Center horizontally */
+            transform: translateX(-50%); /* Adjust for true centering */
+            background-color: #10b981; /* Emerald green */
+            color: white;
+            padding: 1rem 2.5rem;
+            border-radius: 9999px; /* Fully rounded */
+            font-weight: bold;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem; /* Space between icon and text */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: background-color 0.3s ease, transform 0.3s ease;
+            z-index: 1001; /* Ensure it's above the overlay */
+            cursor: pointer;
+        }
+        .cut-to-chase-button:hover {
+            background-color: #059669; /* Darker green on hover */
+            transform: translateX(-50%) scale(1.05);
+        }
+        .cut-to-chase-button svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor; /* Inherit color from parent */
         }
     </style>
 </head>
@@ -152,6 +182,18 @@
         <iframe id="right-game-iframe" src="https://boobalootoo.github.io/aandd/fullflightgame" class="w-full h-full border-none rounded-l-3xl shadow-lg"></iframe>
     </div>
 
+    <button id="cut-to-chase-button" class="cut-to-chase-button">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scissors">
+            <circle cx="6" cy="7" r="3"/>
+            <path d="M8.12 8.12 12 12"/>
+            <path d="M20 4 12 12"/>
+            <path d="M20 20 12 12"/>
+            <circle cx="6" cy="17" r="3"/>
+            <path d="M8.12 15.88 12 12"/>
+        </svg>
+        Cut to the chase
+    </button>
+
     <script>
         const playButtons = document.querySelectorAll('.play-button');
         const checklistView = document.getElementById('checklist-view');
@@ -159,6 +201,7 @@
         const gameIframe = document.getElementById('game-iframe');
         const leftSideHomeButton = document.getElementById('left-side-home-button');
         const rightGameIframe = document.getElementById('right-game-iframe');
+        const cutToChaseButton = document.getElementById('cut-to-chase-button'); // New: Reference to the new button
 
         // Mapping of game data-game attribute to their respective URLs
         const gameUrls = {
@@ -209,6 +252,11 @@
             checklistView.classList.remove('hidden'); // Show the checklist
             gameIframe.src = 'about:blank'; // Clear the iframe's src
             gameIframe.onload = null; // Remove the onload listener
+        });
+
+        // Add click event listener for the "Cut to the chase" button
+        cutToChaseButton.addEventListener('click', () => {
+            window.location.href = 'https://boobalootoo.github.io/aandd/bothspellers'; // Navigate to the new URL
         });
 
         // Helper function to format game names for display
