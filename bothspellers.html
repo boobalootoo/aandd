@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Dual Split Screen PDF Flip (Synchronized End)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    /* Ensure html and body take full viewport height and width */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      overflow: hidden;
+      height: 100%; /* Take full height */
+      width: 100%;  /* Take full width */
+    }
+
+    /* Flex container for the split screen */
+    .split-container {
+      display: flex; /* Use flexbox for layout */
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Left half of the screen where the paperwork PDF animation will be */
+    .left-half {
+      flex: 1; /* Takes up 50% of the width */
+      background-color: #333; /* Dark background for the left side */
+      display: flex; /* Use flexbox to center content */
+      justify-content: center; /* Center horizontally */
+      align-items: center; /* Center vertically */
+      overflow: hidden; /* Hide overflow from canvas */
+      border-right: 2px solid #555; /* A subtle separator */
+    }
+
+    /* Right half where the map PDF animation will be displayed */
+    .right-half {
+      flex: 1; /* Takes up 50% of the width */
+      background-color: #000; /* Black background for the right side */
+      display: flex; /* Use flexbox to center content */
+      justify-content: center; /* Center horizontally */
+      align-items: center; /* Center vertically */
+      overflow: hidden; /* Hide overflow from canvas */
+    }
+
+    /* Canvas styling to fit within its respective half */
+    canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="split-container">
+    <div class="left-half">
+      <canvas id="pdf-canvas-left"></canvas>
+    </div>
+    <div class="right-half">
+      <canvas id="pdf-canvas-right"></canvas>
+    </div>
+  </div>
+
+  <script>
+    // PDF.js worker source, required for PDF rendering
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // --- Left Canvas (Paperwork PDF - FORWARD animation) ---
+    const urlLeft = 'https://raw.githubusercontent.com/boobalootoo/aandd/main/paperwork.pdf';
+    const canvasLeft = document.getElementById('pdf-canvas-left');
+    const ctxLeft = canvasLeft.getContext('2d');
+
+    let pdfDocLeft = null;
+    let currentPageLeft = 0; // Initialize to 0 for forward animation
+    let intervalLeft = 0; // This will be calculated dynamically
+
+    // --- Right Canvas (Map PDF - REVERSE animation) ---
+    const urlRight = 'https://raw.githubusercontent.com/boobalootoo/aandd/main/map.pdf';
+    const canvasRight = document.getElementById('pdf-canvas-right');
+    const ctxRight = canvasRight.getContext('2d');
+
+    let pdfDocRight = null;
+    let currentPageRight = 0;
+    const intervalRight = 500; // Fixed milliseconds between pages for the right animation
+
+    // Function to set canvas sizes based on their parent containers
+    function setupCanvases() {
+      const leftHalf = document.querySelector('.left-half');
+      canvasLeft.width = leftHalf.clientWidth;
+      canvasLeft.height = leftHalf.clientHeight;
+
+      const rightHalf = document.querySelector('.right-half');
+      canvasRight.width = rightHalf.clientWidth;
+      canvasRight.height = rightHalf.clientHeight;
+
+      // If PDFs are already loaded, re-render current pages to fit new sizes
+      if (pdfDocLeft && currentPageLeft > 0 && currentPageLeft <= pdfDocLeft.numPages) {
+        renderPage(pdfDocLeft, canvasLeft, ctxLeft, currentPageLeft);
+      } else if (pdfDocLeft && pdfDocLeft.numPages >= 1) {
+        // If animation hasn't started or is finished, ensure first page is displayed
+        renderPage(pdfDocLeft, canvasLeft, ctxLeft, 1);
+      }
+
+      if (pdfDocRight && currentPageRight > 0 && currentPageRight <= pdfDocRight.numPages) {
+        renderPage(pdfDocRight, canvasRight, ctxRight, currentPageRight);
+      } else if (pdfDocRight && pdfDocRight.numPages >= 1) {
+        // If animation hasn't started or is finished, ensure last page is displayed
+        renderPage(pdfDocRight, canvasRight, ctxRight, pdfDocRight.numPages);
+      }
+    }
+
+    // Initial setup and add event listener for window resize
+    setupCanvases();
+    window.addEventListener('resize', setupCanvases);
+
+    // Generic function to render a specific page on a given canvas context
+    function renderPage(pdfDocument, targetCanvas, targetCtx, pageNum) {
+      if (!pdfDocument || pageNum < 1 || pageNum > pdfDocument.numPages) {
+        // This warning can be noisy if animation finishes, so commented out for general use.
+        // console.warn('Invalid page number or PDF not loaded for rendering. Page:', pageNum);
+        return Promise.resolve();
+      }
+
+      return pdfDocument.getPage(pageNum).then(page => {
+        const unscaledViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(
+          targetCanvas.width / unscaledViewport.width,
+          targetCanvas.height / unscaledViewport.height
+        );
+        const viewport = page.getViewport({ scale });
+
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = viewport.width;
+        offscreenCanvas.height = viewport.height;
+        const offCtx = offscreenCanvas.getContext('2d');
+
+        return page.render({ canvasContext: offCtx, viewport }).promise.then(() => {
+          targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+          const xOffset = (targetCanvas.width - viewport.width) / 2;
+          const yOffset = (targetCanvas.height - viewport.height) / 2;
+          targetCtx.drawImage(offscreenCanvas, xOffset, yOffset, viewport.width, viewport.height);
+        });
+      });
+    }
+
+    // --- Animation function for the left canvas (paperwork.pdf) - FORWARD ---
+    function showNextPageLeft() {
+      currentPageLeft++; // Increment page number
+      // Stop when current page exceeds total pages
+      if (pdfDocLeft && currentPageLeft > pdfDocLeft.numPages) {
+        console.log('Left animation finished.');
+        return; // Stop animation
+      }
+
+      renderPage(pdfDocLeft, canvasLeft, ctxLeft, currentPageLeft).then(() => {
+        setTimeout(() => requestAnimationFrame(showNextPageLeft), intervalLeft);
+      }).catch(error => {
+        console.error('Error rendering left page:', error);
+      });
+    }
+
+    // --- Animation function for the right canvas (map.pdf) - REVERSE ---
+    function showPrevPageRight() {
+      currentPageRight--; // Decrement page number
+      // Stop when current page goes below 1
+      if (currentPageRight < 1) {
+        console.log('Right animation finished.');
+        return; // Stop animation
+      }
+
+      renderPage(pdfDocRight, canvasRight, ctxRight, currentPageRight).then(() => {
+        setTimeout(() => requestAnimationFrame(showPrevPageRight), intervalRight);
+      }).catch(error => {
+        console.error('Error rendering right page:', error);
+      });
+    }
+
+    // Load both PDF documents and then start animations
+    Promise.all([
+      pdfjsLib.getDocument(urlLeft).promise,
+      pdfjsLib.getDocument(urlRight).promise
+    ]).then(([pdfLeft, pdfRight]) => {
+      pdfDocLeft = pdfLeft;
+      pdfDocRight = pdfRight;
+
+      // Calculate total steps for each animation
+      const totalStepsRight = pdfDocRight.numPages > 1 ? (pdfDocRight.numPages - 1) : 0;
+      const totalStepsLeft = pdfDocLeft.numPages > 1 ? (pdfDocLeft.numPages - 1) : 0;
+
+      // Calculate target total duration based on the right animation
+      const targetDuration = totalStepsRight * intervalRight;
+
+      // Calculate intervalLeft to match the target duration
+      if (totalStepsLeft > 0) {
+        intervalLeft = targetDuration / totalStepsLeft;
+      } else {
+        // If left PDF has only one page, no animation steps are needed.
+        // Set interval to 0 or a very small number, or handle it as instant display.
+        intervalLeft = 0; // Effectively makes it instant if only one page
+      }
+
+      // Initialize current pages and start animations
+      currentPageLeft = 0; // Will become 1 on first increment
+      currentPageRight = pdfDocRight.numPages + 1; // Will become pdfDocRight.numPages on first decrement
+
+      // Start animations
+      requestAnimationFrame(showNextPageLeft);
+      requestAnimationFrame(showPrevPageRight);
+
+    }).catch(error => {
+      console.error('Error loading one or both PDFs:', error);
+      ctxLeft.font = '20px Arial';
+      ctxLeft.fillStyle = 'red';
+      ctxLeft.textAlign = 'center';
+      ctxLeft.fillText('Error loading PDF.', canvasLeft.width / 2, canvasLeft.height / 2);
+      ctxRight.font = '20px Arial';
+      ctxRight.fillStyle = 'red';
+      ctxRight.textAlign = 'center';
+      ctxRight.fillText('Error loading PDF.', canvasRight.width / 2, canvasRight.height / 2);
+    });
+  </script>
+</body>
+</html>
