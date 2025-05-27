@@ -26,7 +26,7 @@ const background = new Image();
 background.src = "mouth.png";
 
 const brushImage = new Image();
-brushImage.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Toothbrush_icon.svg/512px-Toothbrush_icon.svg.png"; // Public domain SVG brush icon
+brushImage.src = "brush.png";
 
 const toothbrush = {
   x: 100,
@@ -111,11 +111,25 @@ function gameLoop() {
   }
 }
 
+// Wait for both images to load
+let imagesLoaded = 0;
+function checkStart() {
+  if (imagesLoaded === 2) {
+    ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    spawnPlaque(imageData);
+    gameLoop();
+  }
+}
+
 background.onload = () => {
-  ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  spawnPlaque(imageData);
-  gameLoop();
+  imagesLoaded++;
+  checkStart();
+};
+
+brushImage.onload = () => {
+  imagesLoaded++;
+  checkStart();
 };
 
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
