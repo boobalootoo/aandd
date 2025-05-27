@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple Flight Simulator</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    html, body, #cesiumContainer {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <script>
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzMGZkNWQ0ZS01M2JjLTQ3ZTAtOWE5OC1mNzJjMTlkNTViZjciLCJpZCI6Mjg3OTEzLCJpYXQiOjE3NDI5OTIyNzd9.FNwe_7JWOqcsO854hg_Kokvw8KR-Af5B8qSAz7v-kSM';
+
+    Cesium.createWorldTerrainAsync().then((terrainProvider) => {
+      const viewer = new Cesium.Viewer('cesiumContainer', {
+        terrainProvider: terrainProvider,
+        shouldAnimate: true
+      });
+
+      const startLongitude = -122.4175;
+      const startLatitude = 37.655;
+      const startHeight = 1000;
+
+      const airplane = viewer.entities.add({
+        name: "Simple Plane",
+        position: Cesium.Cartesian3.fromDegrees(startLongitude, startLatitude, startHeight),
+        model: {
+          uri: 'https://cesium.com/downloads/cesiumjs/releases/1.118/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
+          minimumPixelSize: 64
+        },
+        orientation: Cesium.Transforms.headingPitchRollQuaternion(
+          Cesium.Cartesian3.fromDegrees(startLongitude, startLatitude, startHeight),
+          new Cesium.HeadingPitchRoll(0, 0, 0)
+        )
+      });
+
+      viewer.trackedEntity = airplane;
+
+      let heading = 0;
+      let pitch = 0;
+      let roll = 0;
+      let speed = 200;
+
+      document.addEventListener('keydown', (e) => {
+        switch (e.key) {
+          case 'ArrowLeft': roll -= 0.05; break;
+          case 'ArrowRight': roll += 0.05; break;
+          case 'ArrowUp': pitch += 0.05; break;
+          case 'ArrowDown': pitch -= 0.05; break;
+          case 'a': heading -= 0.05; break;
+          case 'd': heading += 0.05; break;
+          case 'w': speed += 10; break;
+          case 's': speed -= 10; break;
+        }
+      });
+
+      viewer.scene.preUpdate.addEventListener(() => {
+        const deltaTime = 1 / 60;
+        const position = airplane.position.getValue(Cesium.JulianDate.now());
+        const hpr = new Cesium.HeadingPitchRoll(heading, pitch, roll);
+
+        const fixedFrame = Cesium.Transforms.headingPitchRollToFixedFrame(position, hpr);
+        const direction = Cesium.Matrix4.multiplyByPointAsVector(fixedFrame, new Cesium.Cartesian3(speed * deltaTime, 0, 0), new Cesium.Cartesian3());
+        const newPosition = Cesium.Cartesian3.add(position, direction, new Cesium.Cartesian3());
+
+        airplane.position = new Cesium.ConstantPositionProperty(newPosition);
+        airplane.orientation = new Cesium.ConstantProperty(Cesium.Transforms.headingPitchRollQuaternion(newPosition, hpr));
+      });
+    });
+  </script>
+</body>
+</html>
