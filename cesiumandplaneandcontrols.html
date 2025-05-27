@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Flight Simulator</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+        html, body, #cesiumContainer {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif; /* Apply Inter font */
+        }
+        /* Ensure the Cesium viewer takes up the full space */
+        .cesium-viewer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        /* Custom styles for buttons to ensure good touch targets */
+        .control-button {
+            min-width: 48px; /* Minimum touch target size */
+            min-height: 48px; /* Minimum touch target size */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="cesiumContainer" class="relative z-0"></div>
+
+    <div class="fixed bottom-0 left-0 right-0 p-4 bg-gray-900 bg-opacity-75 text-white z-10 rounded-t-lg shadow-lg
+                flex flex-col md:flex-row justify-around items-center space-y-4 md:space-y-0 md:space-x-4">
+
+        <div class="flex flex-wrap justify-center gap-4 text-sm font-mono">
+            <div class="p-2 bg-gray-800 rounded-md shadow-inner">Speed: <span id="speedIndicator">0</span> m/s</div>
+            <div class="p-2 bg-gray-800 rounded-md shadow-inner">Heading: <span id="headingIndicator">0</span>°</div>
+            <div class="p-2 bg-gray-800 rounded-md shadow-inner">Pitch: <span id="pitchIndicator">0</span>°</div>
+            <div class="p-2 bg-gray-800 rounded-md shadow-inner">Roll: <span id="rollIndicator">0</span>°</div>
+        </div>
+
+        <div class="flex flex-wrap justify-center gap-3">
+            <div class="flex flex-col items-center space-y-1">
+                <button id="accelerateBtn" class="control-button px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Speed Up (W)</span>
+            </div>
+            <div class="flex flex-col items-center space-y-1">
+                <button id="decelerateBtn" class="control-button px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 active:bg-red-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Slow Down (S)</span>
+            </div>
+
+            <div class="flex flex-col items-center space-y-1">
+                <button id="turnLeftBtn" class="control-button px-4 py-2 rounded-full bg-purple-600 hover:bg-purple-700 active:bg-purple-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Turn Left (A)</span>
+            </div>
+            <div class="flex flex-col items-center space-y-1">
+                <button id="turnRightBtn" class="control-button px-4 py-2 rounded-full bg-purple-600 hover:bg-purple-700 active:bg-purple-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Turn Right (D)</span>
+            </div>
+
+            <div class="flex flex-col items-center space-y-1">
+                <button id="pitchUpBtn" class="control-button px-4 py-2 rounded-full bg-green-600 hover:bg-green-700 active:bg-green-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6 rotate-90" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Pitch Up (Up Arrow)</span>
+            </div>
+            <div class="flex flex-col items-center space-y-1">
+                <button id="pitchDownBtn" class="control-button px-4 py-2 rounded-full bg-green-600 hover:bg-green-700 active:bg-green-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6 -rotate-90" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Pitch Down (Down Arrow)</span>
+            </div>
+
+            <div class="flex flex-col items-center space-y-1">
+                <button id="rollLeftBtn" class="control-button px-4 py-2 rounded-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Roll Left (Left Arrow)</span>
+            </div>
+            <div class="flex flex-col items-center space-y-1">
+                <button id="rollRightBtn" class="control-button px-4 py-2 rounded-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 transition-colors shadow-md">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400">Roll Right (Right Arrow)</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Ensure the animation loop starts when the window loads
+        window.onload = function () {
+            // Set your Cesium Ion default access token
+            Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzMGZkNWQ0ZS01M2JjLTQ3ZTAtOWE5OC1mNzJjMTlkNTViZjciLCJpZCI6Mjg3OTEzLCJpYXQiOjE3NDI5OTIyNzd9.FNwe_7JWOqcsO854hg_Kokvw8KR-Af5B8qSAz7v-kSM';
+
+            /**
+             * Initializes the Cesium viewer and flight simulator logic.
+             * This function checks if Cesium and its required components are ready
+             * before proceeding, retrying after a short delay if not.
+             */
+            function initializeCesium() {
+                // Check if Cesium and its essential components are loaded
+                if (typeof Cesium !== 'undefined' &&
+                    typeof Cesium.Terrain !== 'undefined' && typeof Cesium.Terrain.fromWorldTerrain === 'function' &&
+                    typeof Cesium.OpenStreetMapImageryProvider !== 'undefined') { // Check for OpenStreetMapImageryProvider
+                    console.log("Cesium and its components are ready. Initializing viewer.");
+
+                    // Initialize the Cesium Viewer
+                    const viewer = new Cesium.Viewer('cesiumContainer', {
+                        terrainProvider: Cesium.Terrain.fromWorldTerrain(), // Use the updated function for terrain
+                        imageryProvider: new Cesium.OpenStreetMapImageryProvider({ // Use OpenStreetMap imagery
+                            url: 'https://a.tile.openstreetmap.org/'
+                        }),
+                        shouldAnimate: true, // Ensure animation is enabled for movement
+                        infoBox: false, // Disable default info box
+                        selectionIndicator: false, // Disable default selection indicator
+                        navigationHelpButton: false, // Disable navigation help button
+                        homeButton: false, // Disable home button
+                        geocoder: false, // Disable geocoder
+                        baseLayerPicker: false, // Disable base layer picker
+                        sceneModePicker: false, // Disable scene mode picker
+                        timeline: false, // Disable timeline
+                        animation: false // Disable animation widget
+                    });
+
+                    // Ensure the airplane is rendered correctly against the terrain
+                    viewer.scene.globe.depthTestAgainstTerrain = true;
+
+                    // Initial airplane position
+                    const startLongitude = -122.4175; // San Francisco longitude
+                    const startLatitude = 37.655;    // San Francisco latitude (near SFO airport)
+                    const startHeight = 1000;        // Initial height in meters
+
+                    // Add the airplane entity to the viewer
+                    const airplane = viewer.entities.add({
+                        name: "Simple Plane",
+                        position: Cesium.Cartesian3.fromDegrees(startLongitude, startLatitude, startHeight),
+                        model: {
+                            uri: 'https://cesium.com/downloads/cesiumjs/releases/1.118/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
+                            minimumPixelSize: 64 // Ensure the model is visible even when far away
+                        },
+                        orientation: Cesium.Transforms.headingPitchRollQuaternion(
+                            Cesium.Cartesian3.fromDegrees(startLongitude, startLatitude, startHeight),
+                            new Cesium.HeadingPitchRoll(0, 0, 0) // Initial orientation (heading, pitch, roll)
+                        )
+                    });
+
+                    // Track the airplane with the camera
+                    viewer.trackedEntity = airplane;
+
+                    // --- Flight State Variables ---
+                    let heading = 0; // Yaw (rotation around vertical axis)
+                    let pitch = 0;   // Nose up/down (rotation around side-to-side axis)
+                    let roll = 0;    // Wing tip up/down (rotation around front-to-back axis)
+                    let speed = 200; // Speed in meters per second
+
+                    // --- UI Elements ---
+                    const speedIndicator = document.getElementById('speedIndicator');
+                    const headingIndicator = document.getElementById('headingIndicator');
+                    const pitchIndicator = document.getElementById('pitchIndicator');
+                    const rollIndicator = document.getElementById('rollIndicator');
+
+                    const accelerateBtn = document.getElementById('accelerateBtn');
+                    const decelerateBtn = document.getElementById('decelerateBtn');
+                    const turnLeftBtn = document.getElementById('turnLeftBtn');
+                    const turnRightBtn = document.getElementById('turnRightBtn');
+                    const pitchUpBtn = document.getElementById('pitchUpBtn');
+                    const pitchDownBtn = document.getElementById('pitchDownBtn');
+                    const rollLeftBtn = document.getElementById('rollLeftBtn');
+                    const rollRightBtn = document.getElementById('rollRightBtn');
+
+                    // --- Event Listeners for Keyboard Controls ---
+                    document.addEventListener('keydown', (e) => {
+                        switch (e.key) {
+                            case 'ArrowLeft': roll -= 0.05; break; // Roll left
+                            case 'ArrowRight': roll += 0.05; break; // Roll right
+                            case 'ArrowUp': pitch += 0.05; break;   // Pitch up
+                            case 'ArrowDown': pitch -= 0.05; break; // Pitch down
+                            case 'a': heading -= 0.05; break;       // Turn left (yaw)
+                            case 'd': heading += 0.05; break;       // Turn right (yaw)
+                            case 'w': speed = Math.min(speed + 10, 1000); break; // Accelerate, max 1000 m/s
+                            case 's': speed = Math.max(speed - 10, 0); break;   // Decelerate, min 0 m/s
+                        }
+                        // Prevent default browser actions for arrow keys and space
+                        e.preventDefault();
+                    });
+
+                    // --- Event Listeners for UI Buttons (Touch/Click) ---
+                    // Using mousedown/mouseup for continuous action while pressed
+                    let intervalId;
+
+                    function startAction(action) {
+                        stopAction(); // Clear any existing interval
+                        intervalId = setInterval(action, 50); // Repeat action every 50ms
+                        action(); // Execute immediately on press
+                    }
+
+                    function stopAction() {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                    }
+
+                    // Helper to attach touch/mouse events
+                    function attachControlEvents(button, action) {
+                        button.addEventListener('mousedown', () => startAction(action));
+                        button.addEventListener('mouseup', stopAction);
+                        button.addEventListener('mouseleave', stopAction); // Stop if mouse leaves button while pressed
+                        button.addEventListener('touchstart', (e) => { e.preventDefault(); startAction(action); }, { passive: false }); // Prevent scroll
+                        button.addEventListener('touchend', stopAction);
+                        button.addEventListener('touchcancel', stopAction);
+                    }
+
+                    attachControlEvents(accelerateBtn, () => speed = Math.min(speed + 5, 1000));
+                    attachControlEvents(decelerateBtn, () => speed = Math.max(speed - 5, 0));
+                    attachControlEvents(turnLeftBtn, () => heading -= 0.02);
+                    attachControlEvents(turnRightBtn, () => heading += 0.02);
+                    attachControlEvents(pitchUpBtn, () => pitch += 0.02);
+                    attachControlEvents(pitchDownBtn, () => pitch -= 0.02);
+                    attachControlEvents(rollLeftBtn, () => roll -= 0.02);
+                    attachControlEvents(rollRightBtn, () => roll += 0.02);
+
+                    // --- Main Simulation Loop ---
+                    viewer.scene.preUpdate.addEventListener(() => {
+                        // Calculate time elapsed since last frame (approximately 1/60th of a second)
+                        const deltaTime = viewer.clock.multiplier / 60; // Use viewer.clock.multiplier for animation speed
+
+                        // Get the current position of the airplane
+                        const currentPosition = airplane.position.getValue(viewer.clock.currentTime);
+
+                        // Create a HeadingPitchRoll object from current HPR values
+                        const hpr = new Cesium.HeadingPitchRoll(heading, pitch, roll);
+
+                        // Calculate the new orientation quaternion
+                        const newOrientation = Cesium.Transforms.headingPitchRollQuaternion(currentPosition, hpr);
+
+                        // Create a Matrix3 to store the rotation matrix
+                        const rotationMatrix = new Cesium.Matrix3();
+                        // Convert the quaternion to a rotation matrix
+                        Cesium.Matrix3.fromQuaternion(newOrientation, rotationMatrix);
+
+                        // Calculate the direction vector based on the current orientation and speed
+                        // This transforms the forward vector (1,0,0) in the airplane's local frame
+                        // to the world frame, scaled by speed and deltaTime.
+                        const transformMatrix = Cesium.Matrix4.fromRotationTranslation(
+                            rotationMatrix, // Use the correctly converted rotation matrix
+                            currentPosition
+                        );
+                        const direction = Cesium.Matrix4.multiplyByPointAsVector(
+                            transformMatrix,
+                            new Cesium.Cartesian3(speed * deltaTime, 0, 0), // Move along the airplane's local X-axis
+                            new Cesium.Cartesian3()
+                        );
+
+                        // Calculate the new position by adding the direction vector to the current position
+                        const newPosition = Cesium.Cartesian3.add(currentPosition, direction, new Cesium.Cartesian3());
+
+                        // Update the airplane's position and orientation
+                        airplane.position.setValue(newPosition);
+                        airplane.orientation.setValue(newOrientation);
+
+                        // Update UI indicators
+                        speedIndicator.textContent = speed.toFixed(0);
+                        headingIndicator.textContent = Cesium.Math.toDegrees(heading).toFixed(0);
+                        pitchIndicator.textContent = Cesium.Math.toDegrees(pitch).toFixed(0);
+                        rollIndicator.textContent = Cesium.Math.toDegrees(roll).toFixed(0);
+                    });
+
+                } else {
+                    // If Cesium or its components are not yet ready, retry after a short delay
+                    console.warn("Cesium or its components not yet ready. Retrying in 50ms...");
+                    setTimeout(initializeCesium, 50);
+                }
+            }
+
+            initializeCesium(); // Start the initialization check
+        };
+    </script>
+</body>
+</html>
