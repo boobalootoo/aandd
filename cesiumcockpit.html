@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flight View with Zoom by Arrow Keys</title>
+  <script src="https://unpkg.com/cesium@1.114.0/Build/Cesium/Cesium.js"></script>
+  <link href="https://unpkg.com/cesium@1.114.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <style>
+    html, body, #cesiumContainer {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    }
+    #cockpit {
+      position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
+      background: url('https://raw.githubusercontent.com/boobalootoo/aandd/main/cockpit.png') no-repeat center center;
+      background-size: contain;
+      pointer-events: none; z-index: 10;
+    }
+    #minimap {
+      position: absolute; bottom: 20px; right: 20px; width: 120px; height: 120px;
+      background: url('https://raw.githubusercontent.com/boobalootoo/aandd/main/minimap1.png') no-repeat center center;
+      background-size: cover; z-index: 11;
+      border: 2px solid white; border-radius: 8px;
+    }
+    #compass {
+      position: absolute; bottom: 20px; left: 20px; width: 80px; height: 80px;
+      background: url('https://upload.wikimedia.org/wikipedia/commons/3/3c/Compass_Rose_English_North.svg') no-repeat center center;
+      background-size: contain; z-index: 11;
+    }
+    #resetBtn {
+      position: absolute; top: 20px; left: 20px; z-index: 12;
+      background: rgba(0, 0, 0, 0.6); color: white; border: none;
+      padding: 10px 16px; border-radius: 5px; cursor: pointer;
+    }
+    #resetBtn:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="cockpit"></div>
+  <div id="minimap"></div>
+  <div id="compass"></div>
+  <button id="resetBtn">Reset to Earth</button>
+
+  <script>
+    window.addEventListener("DOMContentLoaded", function () {
+      // Using the provided Cesium Ion access token
+      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzMGZkNWQ0ZS01M2JjLTQ3ZTAtOWE5OC1mNzJjMTlkNTViZjciLCJpZCI6Mjg3OTEzLCJpYXQiOjE3NDI5OTIyNzd9.FNwe_7JWOqcsO854hg_Kokvw8KR-Af5B8qSAz7v-kSM";
+
+      const viewer = new Cesium.Viewer("cesiumContainer", {
+        imageryProvider: new Cesium.UrlTemplateImageryProvider({
+          url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+          credit: "© OpenStreetMap contributors"
+        }),
+        terrainProvider: new Cesium.CesiumTerrainProvider({
+          url: "https://terrain.raptor.ninja/tilesets/cesium/world"
+        }),
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        sceneModePicker: false,
+        navigationHelpButton: false,
+        animation: false,
+        timeline: false,
+        fullscreenButton: false
+      });
+
+      viewer.scene.globe.depthTestAgainstTerrain = true;
+
+      function resetCamera() {
+        viewer.camera.flyTo({
+          // Set destination to London (longitude, latitude) and a slightly lower altitude (3km) for a clearer initial view
+          destination: Cesium.Cartesian3.fromDegrees(-0.1278, 51.5074, 3000), // London coordinates, 3km altitude
+          orientation: {
+            heading: 0.0,
+            pitch: -Cesium.Math.PI_OVER_TWO, // Look straight down
+            roll: 0.0
+          },
+          duration: 2
+        });
+      }
+
+      // Call resetCamera immediately on load to apply the zoomed-in view
+      resetCamera();
+
+      document.getElementById("resetBtn").addEventListener("click", resetCamera);
+
+      const keyMap = {};
+      document.addEventListener("keydown", (e) => (keyMap[e.key.toLowerCase()] = true));
+      document.addEventListener("keyup", (e) => (keyMap[e.key.toLowerCase()] = false));
+
+      const moveSpeed = 100;
+      const zoomSpeed = 500;
+
+      const trailPositions = [];
+      const trailEntity = viewer.entities.add({
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => trailPositions, false),
+          width: 2,
+          material: Cesium.Color.YELLOW
+        }
+      });
+
+      viewer.scene.preRender.addEventListener(() => {
+        const camera = viewer.camera;
+        const direction = Cesium.Cartesian3.clone(camera.direction);
+        const right = Cesium.Cartesian3.clone(camera.right);
+
+        if (keyMap["w"]) camera.move(direction, moveSpeed);
+        if (keyMap["s"]) camera.move(direction, -moveSpeed);
+        if (keyMap["a"]) camera.move(right, -moveSpeed);
+        if (keyMap["d"]) camera.move(right, moveSpeed);
+
+        if (keyMap["arrowup"]) camera.move(direction, zoomSpeed);
+        if (keyMap["arrowdown"]) camera.move(direction, -zoomSpeed);
+
+        const pos = camera.positionWC.clone();
+        if (
+          trailPositions.length === 0 ||
+          Cesium.Cartesian3.distance(pos, trailPositions[trailPositions.length - 1]) > 30
+        ) {
+          trailPositions.push(pos);
+          if (trailPositions.length > 1000) trailPositions.shift();
+        }
+
+        const compass = document.getElementById("compass");
+        compass.style.transform = `rotate(${-Cesium.Math.toDegrees(camera.heading)}deg)`;
+      });
+    });
+  </script>
+</body>
+</html>
